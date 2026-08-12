@@ -104,6 +104,19 @@ local function BuildWatchList()
 		tinsert(list, {owner = UF, key = "ApplyRoleNameList", label = "UnitFrames:RoleSort"})
 	end
 
+	local EI = E:GetModule("Enhanced_EquipmentInfo", true)
+	if EI then
+		tinsert(list, {owner = EI, key = "UpdatePaperDoll", label = "EquipmentInfo:StartUpdate"})
+		tinsert(list, {owner = EI, key = "UpdatePaperDollSlot", label = "EquipmentInfo:UpdateSlot"})
+	end
+
+	local CF = E:GetModule("Enhanced_CharacterFrame", true)
+	if CF then
+		tinsert(list, {owner = CF, key = "PaperDoll_InitStatCategories", label = "CharacterFrame:InitStatCategories"})
+		tinsert(list, {owner = CF, key = "PaperDollFrame_UpdateStats", label = "CharacterFrame:UpdateStats"})
+		tinsert(list, {owner = CF, key = "PaperDollFrame_SetLevel", label = "CharacterFrame:SetLevel"})
+	end
+
 	return list
 end
 
@@ -186,7 +199,7 @@ end
 ----------------------------------------------------------------------------
 -- Session control
 ----------------------------------------------------------------------------
-local ADDON_LIST = {"ElvUI", "ElvUI_OptionsUI", "ElvUI_Enhanced", "ElvUI_AddOnSkins", "ElvUI_PartyDamage", "ElvUI_EnhancedFriendsList", "ElvUI_ExtraActionBars"}
+local ADDON_LIST = {"ElvUI", "ElvUI_OptionsUI", "ElvUI_Enhanced", "ElvUI_AddOnSkins", "ElvUI_PartyDamage", "ElvUI_EnhancedFriendsList", "ElvUI_ExtraActionBars", "AscensionUI"}
 
 function PF:Start()
 	if session.running then
@@ -287,7 +300,7 @@ BuildReport = function()
 	for _, addon in ipairs(ADDON_LIST) do
 		memNow = memNow + (GetAddOnMemoryUsage(addon) or 0)
 	end
-	tinsert(out, format("ElvUI suite memory: %.1f MB (%+.1f MB during session)", memNow / 1024, (memNow - session.memAtStart) / 1024))
+	tinsert(out, format("Tracked addons memory: %.1f MB (%+.1f MB during session)", memNow / 1024, (memNow - session.memAtStart) / 1024))
 	tinsert(out, "")
 
 	-- wrapped functions

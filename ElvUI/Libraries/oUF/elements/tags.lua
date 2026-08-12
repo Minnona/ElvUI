@@ -512,7 +512,6 @@ local unitlessEvents = {
 local events = {}
 local frame = CreateFrame('Frame')
 frame:SetScript('OnEvent', function(self, event, unit)
-	local _ts = debugprofilestop()
 	local strings = events[event]
 	if(strings) then
 		for _, fontstring in next, strings do
@@ -520,10 +519,6 @@ frame:SetScript('OnEvent', function(self, event, unit)
 				fontstring:UpdateTag()
 			end
 		end
-	end
-	local _te = debugprofilestop() - _ts
-	if _te > 10 and _G.ElvUI_LogDiagnostic then
-		_G.ElvUI_LogDiagnostic(string.format("[Profile] oUF Tags OnEvent(%s) took: %.2f ms", tostring(event), _te))
 	end
 end)
 
