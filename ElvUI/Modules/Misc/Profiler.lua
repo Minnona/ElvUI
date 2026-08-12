@@ -11,9 +11,11 @@ local tinsert, tsort, tconcat = table.insert, table.sort, table.concat
 --WoW API / Variables
 local CreateFrame = CreateFrame
 local GetAddOnCPUUsage = GetAddOnCPUUsage
+local GetAddOnInfo = GetAddOnInfo
 local GetAddOnMemoryUsage = GetAddOnMemoryUsage
 local GetCVar = GetCVar
 local GetFramerate = GetFramerate
+local GetNumAddOns = GetNumAddOns
 local GetNumPartyMembers = GetNumPartyMembers
 local GetNumRaidMembers = GetNumRaidMembers
 local GetRealZoneText = GetRealZoneText
@@ -200,6 +202,33 @@ end
 -- Session control
 ----------------------------------------------------------------------------
 local ADDON_LIST = {"ElvUI", "ElvUI_OptionsUI", "ElvUI_Enhanced", "ElvUI_AddOnSkins", "ElvUI_PartyDamage", "ElvUI_EnhancedFriendsList", "ElvUI_ExtraActionBars", "AscensionUI"}
+local addonIndices = {}
+
+local function GetAddonIndex(addon)
+	local index = addonIndices[addon]
+	if index ~= nil then return index or nil end
+
+	for i = 1, GetNumAddOns() do
+		if GetAddOnInfo(i) == addon then
+			addonIndices[addon] = i
+			return i
+		end
+	end
+
+	addonIndices[addon] = false
+end
+
+local function GetTrackedMemory()
+	local total = 0
+	for _, addon in ipairs(ADDON_LIST) do
+		local index = GetAddonIndex(addon)
+		if index then
+			total = total + (GetAddOnMemoryUsage(index) or 0)
+		end
+	end
+
+	return total
+end
 
 function PF:Start()
 	if session.running then
@@ -220,16 +249,14 @@ function PF:Start()
 	session.report = nil
 
 	UpdateAddOnMemoryUsage()
-	session.memAtStart = 0
-	for _, addon in ipairs(ADDON_LIST) do
-		session.memAtStart = session.memAtStart + (GetAddOnMemoryUsage(addon) or 0)
-	end
+	session.memAtStart = GetTrackedMemory()
 
 	session.cpuProfiling = GetCVar("scriptProfile") == "1"
 	if session.cpuProfiling then
 		UpdateAddOnCPUUsage()
 		for _, addon in ipairs(ADDON_LIST) do
-			session.addonCPUStart[addon] = GetAddOnCPUUsage(addon) or 0
+			local index = GetAddonIndex(addon)
+			session.addonCPUStart[addon] = index and (GetAddOnCPUUsage(index) or 0) or 0
 		end
 	end
 
@@ -296,10 +323,7 @@ BuildReport = function()
 	tinsert(out, format("Lua garbage: %.0f KB/s average | %.0f KB/s peak | %.1f MB total churned", churnRate, session.churnPeak, session.churnSum / 1024))
 
 	UpdateAddOnMemoryUsage()
-	local memNow = 0
-	for _, addon in ipairs(ADDON_LIST) do
-		memNow = memNow + (GetAddOnMemoryUsage(addon) or 0)
-	end
+	local memNow = GetTrackedMemory()
 	tinsert(out, format("Tracked addons memory: %.1f MB (%+.1f MB during session)", memNow / 1024, (memNow - session.memAtStart) / 1024))
 	tinsert(out, "")
 
@@ -340,7 +364,8 @@ BuildReport = function()
 		UpdateAddOnCPUUsage()
 		local cpuList = {}
 		for _, addon in ipairs(ADDON_LIST) do
-			local total = (GetAddOnCPUUsage(addon) or 0) - (session.addonCPUStart[addon] or 0)
+			local index = GetAddonIndex(addon)
+			local total = (index and GetAddOnCPUUsage(index) or 0) - (session.addonCPUStart[addon] or 0)
 			if total > 0 then tinsert(cpuList, {addon = addon, total = total}) end
 		end
 		tsort(cpuList, function(a, b) return a.total > b.total end)
