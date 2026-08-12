@@ -59,7 +59,7 @@ local session = {
 	fpsSamples = 0, fpsSum = 0, fpsMin = 9999,
 	-- memory
 	lastMem = 0, churnSum = 0, churnPeak = 0, churnSamples = 0,
-	memAtStart = 0,
+	memAtStart = 0, luaMemAtStart = 0,
 	-- events
 	eventCounts = {},
 	eventTotal = 0,
@@ -246,6 +246,7 @@ function PF:Start()
 	session.eventTotal = 0
 	session.stats = {}
 	session.lastMem = collectgarbage("count")
+	session.luaMemAtStart = session.lastMem
 	session.report = nil
 
 	UpdateAddOnMemoryUsage()
@@ -324,7 +325,13 @@ BuildReport = function()
 
 	UpdateAddOnMemoryUsage()
 	local memNow = GetTrackedMemory()
-	tinsert(out, format("Tracked addons memory: %.1f MB (%+.1f MB during session)", memNow / 1024, (memNow - session.memAtStart) / 1024))
+	if session.memAtStart > 0 or memNow > 0 then
+		tinsert(out, format("Tracked addons memory: %.1f MB (%+.1f MB during session)", memNow / 1024, (memNow - session.memAtStart) / 1024))
+	else
+		local luaMemNow = collectgarbage("count")
+		tinsert(out, "Tracked addons memory: unavailable (client returned zero)")
+		tinsert(out, format("Total Lua memory: %.1f MB (%+.1f MB during session)", luaMemNow / 1024, (luaMemNow - session.luaMemAtStart) / 1024))
+	end
 	tinsert(out, "")
 
 	-- wrapped functions
