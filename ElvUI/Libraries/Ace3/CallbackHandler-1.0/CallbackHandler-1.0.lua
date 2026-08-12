@@ -24,24 +24,19 @@ end
 
 local function CreateDispatcher(argCount)
 	local code = [[
-	local next, xpcall, eh, dbgstop, logfn = ...
+	local next, xpcall, eh = ...
 
 	local method, ARGS
 	local function call() method(ARGS) end
 
-	local function dispatch(handlers, eventname, ...)
+	local function dispatch(handlers, ...)
 		local index
 		index, method = next(handlers)
 		if not method then return end
 		local OLD_ARGS = ARGS
-		ARGS = eventname, ...
+		ARGS = ...
 		repeat
-			local _s = dbgstop()
 			xpcall(call, eh)
-			local _e = dbgstop() - _s
-			if _e > 10 and logfn then
-				logfn(string.format("[Profile] AceHandler %s|%s took: %.2f ms", tostring(eventname), tostring(index), _e))
-			end
 			index, method = next(handlers, index)
 		until not method
 		ARGS = OLD_ARGS
@@ -53,7 +48,7 @@ local function CreateDispatcher(argCount)
 	local ARGS, OLD_ARGS = {}, {}
 	for i = 1, argCount do ARGS[i], OLD_ARGS[i] = "arg"..i, "old_arg"..i end
 	code = code:gsub("OLD_ARGS", tconcat(OLD_ARGS, ", ")):gsub("ARGS", tconcat(ARGS, ", "))
-	return assert(loadstring(code, "safecall Dispatcher["..argCount.."]"))(next, xpcall, errorhandler, debugprofilestop, function(msg) if _G.ElvUI_LogDiagnostic then _G.ElvUI_LogDiagnostic(msg) end end)
+	return assert(loadstring(code, "safecall Dispatcher["..argCount.."]"))(next, xpcall, errorhandler)
 end
 
 local Dispatchers = setmetatable({}, {__index=function(self, argCount)
@@ -240,4 +235,3 @@ end
 -- CallbackHandler purposefully does NOT do explicit embedding. Nor does it
 -- try to upgrade old implicit embeds since the system is selfcontained and
 -- relies on closures to work.
-
