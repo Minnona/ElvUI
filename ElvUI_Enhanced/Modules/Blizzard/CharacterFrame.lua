@@ -2898,12 +2898,21 @@ do -- CharacterFrame
 		table.RemoveItem(PAPERDOLL_STATCATEGORY_DEFAULTORDER, "PRIMARY_STAT")
 	end
 
-	local activeSpec = GetActiveTalentGroup()
-	if activeSpec == 1 then
-		self:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName, E.private.enhanced.character.player.collapsedName, "player")
-	else
-		self:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName2, E.private.enhanced.character.player.collapsedName2, "player")
+	local activeStatCategorySpec
+	local function RefreshPlayerStatCategories(force)
+		local activeSpec = GetActiveTalentGroup()
+		if not force and activeStatCategorySpec == activeSpec then return end
+
+		if activeSpec == 1 then
+			module:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName, E.private.enhanced.character.player.collapsedName, "player")
+		else
+			module:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName2, E.private.enhanced.character.player.collapsedName2, "player")
+		end
+
+		activeStatCategorySpec = activeSpec
 	end
+
+	RefreshPlayerStatCategories(true)
 
 	PaperDollFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
 	PaperDollFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
@@ -2916,6 +2925,12 @@ do -- CharacterFrame
 			if PaperDollTitlesPane:IsShown() then
 				module:PaperDollTitlesPane_Update()
 			end
+		elseif event == "ACTIVE_TALENT_GROUP_CHANGED" then
+			activeStatCategorySpec = nil
+			if self:IsVisible() then
+				RefreshPlayerStatCategories()
+			end
+			return
 		end
 
 		if not self:IsVisible() then return end
@@ -2932,12 +2947,6 @@ do -- CharacterFrame
 			self:SetScript("OnUpdate", PaperDollFrame_QueuedUpdate)
 		elseif event == "PLAYER_TALENT_UPDATE" then
 			module:PaperDollFrame_SetLevel()
-		elseif event == "ACTIVE_TALENT_GROUP_CHANGED" then
-			if GetActiveTalentGroup() == 1 then
-				module:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName, E.private.enhanced.character.player.collapsedName, "player")
-			else
-				module:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName2, E.private.enhanced.character.player.collapsedName2, "player")
-			end
 		end
 	end)
 
@@ -2957,11 +2966,7 @@ do -- CharacterFrame
 			module:PaperDollTitlesPane_Update()
 		end
 
-		if GetActiveTalentGroup() == 1 then
-			module:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName, E.private.enhanced.character.player.collapsedName, "player")
-		else
-			module:PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, E.private.enhanced.character.player.orderName2, E.private.enhanced.character.player.collapsedName2, "player")
-		end
+		RefreshPlayerStatCategories()
 
 		if E.private.enhanced.character.collapsed then
 			module:CharacterFrame_Collapse()
