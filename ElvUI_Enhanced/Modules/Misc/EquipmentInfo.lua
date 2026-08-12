@@ -6,7 +6,6 @@ local format = string.format
 local pairs = pairs
 
 local GetInventoryItemDurability = GetInventoryItemDurability
-local GetInventoryItemID = GetInventoryItemID
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventorySlotInfo = GetInventorySlotInfo
 local GetItemInfo = GetItemInfo
@@ -65,78 +64,150 @@ local slots = {
 --	["AmmoSlot"] = false,
 }
 
+local slotOrder = {
+	"HeadSlot", "NeckSlot", "ShoulderSlot", "BackSlot", "ChestSlot", "WristSlot",
+	"HandsSlot", "WaistSlot", "LegsSlot", "FeetSlot", "Finger0Slot", "Finger1Slot",
+	"Trinket0Slot", "Trinket1Slot", "MainHandSlot", "SecondaryHandSlot", "RangedSlot",
+}
+
+local function IsPaperDollShown(updateType)
+	if updateType == "player" then
+		return AscensionCharacterFrame and AscensionCharacterFrame:IsShown()
+	else
+		return AscensionInspectFrame and AscensionInspectFrame:IsShown()
+	end
+end
+
+local function UpdateDurabilitySlot(frame, slotID)
+	frame.DurabilityInfo:SetText()
+
+	local db = E.db.enhanced.equipment.durability
+	if not db.enable then return end
+
+	local current, maximum = GetInventoryItemDurability(slotID)
+	if current and maximum and (not db.onlydamaged or current < maximum) then
+		local r, g, b = E:ColorGradient((current / maximum), 1, 0, 0, 1, 1, 0, 0, 1, 0)
+		frame.DurabilityInfo:SetFormattedText("%s%.0f%%|r", E:RGBToHex(r, g, b), (current / maximum) * 100)
+	end
+end
+
+function EI:UpdatePaperDollSlot(unit, baseName, slotName)
+	local frame = _G[format("%s%s", baseName, slotName)]
+	if not frame then return end
+
+	local slotID = GetInventorySlotInfo(slotName)
+	frame.ItemLevel:SetText()
+
+	if E.db.enhanced.equipment.itemlevel.enable then
+		local itemLink = GetInventoryItemLink(unit, slotID)
+
+		if itemLink then
+			local itemLevel = GetItemLevelFromTooltip(unit, slotID)
+			local _, _, rarity, fallbackItemLevel = GetItemInfo(itemLink)
+			itemLevel = itemLevel or fallbackItemLevel
+
+			if itemLevel then
+				frame.ItemLevel:SetText(itemLevel)
+
+				if E.db.enhanced.equipment.itemlevel.qualityColor and rarity and rarity > 1 then
+					frame.ItemLevel:SetTextColor(GetItemQualityColor(rarity))
+				else
+					frame.ItemLevel:SetTextColor(1, 1, 1)
+				end
+			end
+		end
+	end
+
+	if unit == "player" and slots[slotName] then
+		UpdateDurabilitySlot(frame, slotID)
+	end
+end
+
+function EI:UpdateDurability()
+	if not self.initialized or not E.db.enhanced.equipment.enable or not IsPaperDollShown("player") then return end
+
+	for slotName, durability in pairs(slots) do
+		if durability then
+			local frame = _G[format("AscensionCharacter%s", slotName)]
+			if frame then
+				UpdateDurabilitySlot(frame, GetInventorySlotInfo(slotName))
+			end
+		end
+	end
+end
+
 function EI:UpdatePaperDoll(unit)
-	if not self.initialized then return end
+	if not self.initialized or not E.db.enhanced.equipment.enable then return end
 
-	if unit == "player" and InCombatLockdown() then
-		self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnEvent")
-		return
-	elseif unit ~= "player" then
-		if AscensionInspectFrame then
-			unit = AscensionInspectFrame.unit
+	local updateType
+	if unit == "player" then
+		updateType = "player"
+		if not IsPaperDollShown(updateType) then
+			self.playerPaperDollDirty = true
+			return
+		elseif InCombatLockdown() then
+			self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnEvent")
+			return
+		end
+	else
+		updateType = "inspect"
+		if not AscensionInspectFrame then return end
 
-			if not unit then return end
-		else
+		unit = AscensionInspectFrame.unit
+		if not unit or not IsPaperDollShown(updateType) then
+			self.inspectPaperDollDirty = true
 			return
 		end
 	end
 
-	local baseName = unit == "player" and "AscensionCharacter" or "AscensionInspect"
-	local frame, slotID
-	local _, rarity, itemLevel
-	local current, maximum, r, g, b
+	local baseName = updateType == "player" and "AscensionCharacter" or "AscensionInspect"
+	self.paperDollGeneration = self.paperDollGeneration or {}
+	self.paperDollGeneration[updateType] = (self.paperDollGeneration[updateType] or 0) + 1
+	local generation = self.paperDollGeneration[updateType]
+	local index = 1
 
-	for slotName, durability in pairs(slots) do
-		frame = _G[format("%s%s", baseName, slotName)]
+	local function UpdateNextSlot()
+		if not E.db.enhanced.equipment.enable or not IsPaperDollShown(updateType) or self.paperDollGeneration[updateType] ~= generation then return end
 
-		if frame then
-			slotID = GetInventorySlotInfo(slotName)
+		local slotName = slotOrder[index]
+		if not slotName then return end
 
-			frame.ItemLevel:SetText()
+		self:UpdatePaperDollSlot(unit, baseName, slotName)
+		index = index + 1
 
-			if E.db.enhanced.equipment.itemlevel.enable then
-				local itemLink = GetInventoryItemLink(unit, slotID)
-
-				if itemLink then
-					itemLevel = GetItemLevelFromTooltip(unit, slotID)
-
-					if not itemLevel then
-						_, _, rarity, itemLevel = GetItemInfo(itemLink)
-					else
-						_, _, rarity = GetItemInfo(itemLink)
-					end
-
-					if itemLevel then
-						frame.ItemLevel:SetText(itemLevel)
-
-						if E.db.enhanced.equipment.itemlevel.qualityColor then
-							frame.ItemLevel:SetTextColor()
-							if rarity and rarity > 1 then
-								frame.ItemLevel:SetTextColor(GetItemQualityColor(rarity))
-							else
-								frame.ItemLevel:SetTextColor(1, 1, 1)
-							end
-						else
-							frame.ItemLevel:SetTextColor(1, 1, 1)
-						end
-					end
-				end
-			end
-
-			if unit == "player" and durability then
-				frame.DurabilityInfo:SetText()
-
-				if E.db.enhanced.equipment.durability.enable then
-					current, maximum = GetInventoryItemDurability(slotID)
-
-					if current and maximum and (not E.db.enhanced.equipment.durability.onlydamaged or current < maximum) then
-						r, g, b = E:ColorGradient((current / maximum), 1, 0, 0, 1, 1, 0, 0, 1, 0)
-						frame.DurabilityInfo:SetFormattedText("%s%.0f%%|r", E:RGBToHex(r, g, b), (current / maximum) * 100)
-					end
-				end
-			end
+		if index <= #slotOrder then
+			E:Delay(0, UpdateNextSlot)
+		elseif updateType == "player" then
+			self.playerPaperDollDirty = nil
+		else
+			self.inspectPaperDollDirty = nil
 		end
 	end
+
+	UpdateNextSlot()
+end
+
+function EI:QueuePaperDollUpdate(unit)
+	if not self.initialized or not E.db.enhanced.equipment.enable then return end
+
+	local updateType = unit == "player" and "player" or "inspect"
+	if not IsPaperDollShown(updateType) then
+		if updateType == "player" then
+			self.playerPaperDollDirty = true
+		else
+			self.inspectPaperDollDirty = true
+		end
+		return
+	end
+
+	self.pendingPaperDollUpdates = self.pendingPaperDollUpdates or {}
+	if self.pendingPaperDollUpdates[updateType] then return end
+
+	self.pendingPaperDollUpdates[updateType] = true
+	E:Delay(0.05, function()
+		EI.pendingPaperDollUpdates[updateType] = nil
+		EI:UpdatePaperDoll(updateType == "player" and "player" or nil)
+	end)
 end
 
 function EI:BuildInfoText(name)
@@ -183,21 +254,25 @@ function EI:UpdateInfoText(name)
 end
 
 local function InspectFrameUpdate()
-	EI:UpdatePaperDoll()
+	EI:QueuePaperDollUpdate()
+end
+
+local function CharacterFrameUpdate()
+	EI:QueuePaperDollUpdate("player")
 end
 
 function EI:OnEvent(event, unit)
 	if event == "UPDATE_INVENTORY_DURABILITY" then
-		self:UpdatePaperDoll("player")
+		self:UpdateDurability()
 	elseif event == "UNIT_INVENTORY_CHANGED" then
 		if unit == "player" then
-			self:UpdatePaperDoll("player")
+			self:QueuePaperDollUpdate("player")
 		elseif AscensionInspectFrame and unit == AscensionInspectFrame.unit then
-			self:UpdatePaperDoll(unit)
+			self:QueuePaperDollUpdate()
 		end
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-		self:UpdatePaperDoll("player")
+		self:QueuePaperDollUpdate("player")
 	elseif event == "ADDON_LOADED" and unit == "Ascension_InspectUI" then
 		self.initializedInspect = true
 		self:UnregisterEvent("ADDON_LOADED")
@@ -214,13 +289,23 @@ function EI:InitialUpdatePaperDoll()
 	self:BuildInfoText("AscensionCharacter")
 
 	self.initialized = true
+	self.playerPaperDollDirty = true
+
+	if not self.characterFrameHooked then
+		AscensionCharacterFrame:HookScript("OnShow", CharacterFrameUpdate)
+		self.characterFrameHooked = true
+	end
+
+	if AscensionCharacterFrame:IsShown() then
+		self:QueuePaperDollUpdate("player")
+	end
 end
 
 function EI:UpdateText()
-	self:UpdatePaperDoll("player")
+	self:QueuePaperDollUpdate("player")
 
 	if self.initializedInspect and AscensionInspectFrame.unit then
-		self:UpdatePaperDoll()
+		self:QueuePaperDollUpdate()
 	end
 end
 
@@ -257,6 +342,10 @@ function EI:ToggleState(init)
 			self:RegisterEvent("ADDON_LOADED", "OnEvent")
 		end
 	elseif self.initialized then
+		if self.paperDollGeneration then
+			self.paperDollGeneration.player = (self.paperDollGeneration.player or 0) + 1
+			self.paperDollGeneration.inspect = (self.paperDollGeneration.inspect or 0) + 1
+		end
 		self:UnhookAll()
 		self:UnregisterAllEvents()
 
