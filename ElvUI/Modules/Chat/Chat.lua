@@ -717,19 +717,42 @@ function CH:UpdateAnchors()
 	CH:PositionChat(true)
 end
 
-local function FindRightChatID()
-	local rightChatID
+local function IsValidRightChatID(id)
+	id = tonumber(id)
+	if not id or id < 1 or id > NUM_CHAT_WINDOWS then return end
 
+	local frameName = CHAT_FRAMES[id]
+	local chat = frameName and _G[frameName]
+	if chat and chat:IsShown() and not chat.isDocked then
+		return id
+	end
+end
+
+local function FindRightChatID()
 	for id, frameName in ipairs(CHAT_FRAMES) do
 		local chat = _G[frameName]
 
-		if E:FramesOverlap(chat, RightChatPanel) and not E:FramesOverlap(chat, LeftChatPanel) then
-			rightChatID = id
-			break
+		if IsValidRightChatID(id) and E:FramesOverlap(chat, RightChatPanel) and not E:FramesOverlap(chat, LeftChatPanel) then
+			ElvCharacterDB.RightChatWindowID = id
+			return id
 		end
 	end
 
-	return rightChatID
+	-- Blizzard restores undocked chat windows before ElvUI positions its panels.
+	-- The saved coordinates can therefore put the right chat at the left edge on
+	-- reload, making the overlap-only lookup above lose ownership of the frame.
+	local savedID = IsValidRightChatID(ElvCharacterDB.RightChatWindowID)
+	if savedID then
+		return savedID
+	end
+
+	-- ElvUI's installer uses ChatFrame3 for the right panel. This migration
+	-- repairs existing characters once, before they have a persisted ID.
+	local legacyID = IsValidRightChatID(3)
+	if legacyID then
+		ElvCharacterDB.RightChatWindowID = legacyID
+		return legacyID
+	end
 end
 
 function CH:UpdateChatTabs()
@@ -790,6 +813,7 @@ function CH:PositionChat(override)
 		tab.owner = chat
 
 		if chat:IsShown() and (id <= NUM_CHAT_WINDOWS) and id == self.RightChatWindowID then
+			ElvCharacterDB.RightChatWindowID = id
 			chat:ClearAllPoints()
 
 			if E.db.datatexts.rightChatPanel then
@@ -815,6 +839,7 @@ function CH:PositionChat(override)
 			if chat:IsMovable() then
 				chat:SetUserPlaced(true)
 			end
+			FCF_SetLocked(chat, 1)
 			if self.db.panelBackdrop == "HIDEBOTH" or self.db.panelBackdrop == "LEFT" then
 				CH:SetupChatTabs(tab, fadeTabsNoBackdrop and true or false)
 			else
