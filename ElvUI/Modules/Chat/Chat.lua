@@ -1075,6 +1075,15 @@ function CH:GetPluginIcon(sender, name, realm)
 	return icon
 end
 
+local function GetChatPlayerInfoByGUID(guid)
+	if type(guid) ~= "string" or guid == "" then return end
+
+	local ok, localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = pcall(GetPlayerInfoByGUID, guid)
+	if ok then
+		return localizedClass, englishClass, localizedRace, englishRace, sex, name, realm
+	end
+end
+
 if _G.GetColoredName and not _G.GetColoredName_Protected then
 	_G.GetColoredName_Protected = true
 	local origBlizzGetColoredName = _G.GetColoredName
@@ -1092,8 +1101,8 @@ function CH:GetColoredName(event, _, arg2, _, _, _, _, _, arg8, _, _, _, arg12)
 	end
 
 	local info = ChatTypeInfo[chatType]
-	if info and info.colorNameByClass and arg12 ~= "" then
-		local _, englishClass = GetPlayerInfoByGUID(arg12)
+	if info and info.colorNameByClass then
+		local _, englishClass = GetChatPlayerInfoByGUID(arg12)
 
 		if englishClass then
 			local classColorTable = RAID_CLASS_COLORS[englishClass]
@@ -1132,11 +1141,11 @@ function CH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, 
 			end
 		end
 
-		local _, _, englishClass, _, _, _, name, realm = pcall(GetPlayerInfoByGUID, arg12)
+		local _, englishClass, _, _, _, name, realm = GetChatPlayerInfoByGUID(arg12)
 		local coloredName = historySavedName or CH:GetColoredName(event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12)
 
-		local nameWithRealm = strmatch(realm ~= "" and realm or E.myrealm, "%s*(%S+)$")
-		if name and name ~= "" then
+		local nameWithRealm = strmatch((realm and realm ~= "" and realm) or E.myrealm or "", "%s*(%S+)$")
+		if name and name ~= "" and nameWithRealm then
 			nameWithRealm = name.."-"..nameWithRealm
 			CH.ClassNames[strlower(name)] = englishClass
 			CH.ClassNames[strlower(nameWithRealm)] = englishClass
@@ -2181,8 +2190,8 @@ end
 function CH:GetPlayerInfoByGUID(guid)
 	local data = CH.GuidCache[guid]
 	if not data then
-		local ok, localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = pcall(GetPlayerInfoByGUID, guid)
-		if not (ok and englishClass) then return end
+		local localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = GetChatPlayerInfoByGUID(guid)
+		if not englishClass then return end
 
 		local nameWithRealm = name..'-'..GetRealmName()
 
